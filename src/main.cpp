@@ -40,6 +40,17 @@ int main() {
 	// Raytracer variables
     std::vector<uint32_t> pixels(W * H);
 
+	for (int j = 0; j < H; ++j)
+    {
+		for (int i = 0; i < W; ++i)
+        {
+			float r = float(i) / W;
+			float g = float(j) / H;
+			float b = 0.0f;
+			pixels[j * W + i] = (uint32_t(255) << 24) | (uint32_t(r * 255) << 16) | (uint32_t(g * 255) << 8) | uint32_t(b * 255);
+		}
+	}
+
     bool running = true;
     while (running)
     {
@@ -56,6 +67,8 @@ int main() {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+
+		//TODO: Add ImGui widgets here
 
         ImGui::EndFrame();
         ImGui::Render();
