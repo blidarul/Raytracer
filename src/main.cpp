@@ -6,6 +6,7 @@
 #include <cmath>
 #include <iostream>
 #include "vec3.h"
+#include "color.h"
 
 void calculatePixels(std::vector<uint32_t>& pixels, int W, int H);
 
@@ -42,10 +43,11 @@ int main()
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
-	// Raytracer variables
+	//Calculate Image
     std::vector<uint32_t> pixels(W * H);
-
 	calculatePixels(pixels, W, H);
+
+
 
     bool running = true;
     while (running)
@@ -99,10 +101,8 @@ void calculatePixels(std::vector<uint32_t>& pixels, int W, int H)
         std::clog << "\rScanlines remaining: " << (H - j) << ' ' << std::flush;
         for (int i = 0; i < W; ++i)
         {
-            float r = float(i) / W;
-            float g = float(j) / H;
-            float b = 0.0f;
-            pixels[j * W + i] = (uint32_t(255) << 24) | (uint32_t(r * 255) << 16) | (uint32_t(g * 255) << 8) | uint32_t(b * 255);
+            auto pixel_color = color(double(i) / W, double(j) / H, 0.0f);
+            pixels[j * W + i] = set_color(255, pixel_color);
         }
     }
     std::clog << "\rDone.                 \n";
