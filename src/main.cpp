@@ -4,8 +4,13 @@
 #include <imgui_impl_sdlrenderer3.h>
 #include <vector>
 #include <cmath>
+#include <iostream>
+#include "vec3.h"
 
-int main() {
+void calculatePixels(std::vector<uint32_t>& pixels, int W, int H);
+
+int main()
+{
     const int W = 800, H = 600;
 
     // SDL3 Init
@@ -40,16 +45,7 @@ int main() {
 	// Raytracer variables
     std::vector<uint32_t> pixels(W * H);
 
-	for (int j = 0; j < H; ++j)
-    {
-		for (int i = 0; i < W; ++i)
-        {
-			float r = float(i) / W;
-			float g = float(j) / H;
-			float b = 0.0f;
-			pixels[j * W + i] = (uint32_t(255) << 24) | (uint32_t(r * 255) << 16) | (uint32_t(g * 255) << 8) | uint32_t(b * 255);
-		}
-	}
+	calculatePixels(pixels, W, H);
 
     bool running = true;
     while (running)
@@ -94,4 +90,20 @@ int main() {
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
+}
+
+void calculatePixels(std::vector<uint32_t>& pixels, int W, int H)
+{
+    for (int j = 0; j < H; ++j)
+    {
+        std::clog << "\rScanlines remaining: " << (H - j) << ' ' << std::flush;
+        for (int i = 0; i < W; ++i)
+        {
+            float r = float(i) / W;
+            float g = float(j) / H;
+            float b = 0.0f;
+            pixels[j * W + i] = (uint32_t(255) << 24) | (uint32_t(r * 255) << 16) | (uint32_t(g * 255) << 8) | uint32_t(b * 255);
+        }
+    }
+    std::clog << "\rDone.                 \n";
 }

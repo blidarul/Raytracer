@@ -9,6 +9,10 @@ find_package(imgui CONFIG REQUIRED)
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     SDL3::SDL3
     imgui::imgui
