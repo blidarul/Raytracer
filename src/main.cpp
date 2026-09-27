@@ -45,6 +45,7 @@ int main()
     // Camera
     camera cam((16.0 / 9.0), 1600, renderer);
 
+    // Update frame
     cam.update_frame(world);
 
     // Running loop ===============================================================================
@@ -55,14 +56,12 @@ int main()
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            //ImGui_ImplSDL3_ProcessEvent(&e);
             if (e.type == SDL_EVENT_QUIT) 
                 running = false;
         }
 
         // Render the raytraced image
         cam.render();
-
     }
 
     // Cleanup ====================================================================================
