@@ -1,18 +1,68 @@
+// SDL/ImGui
 #include <SDL3/SDL.h>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
+
+// Standard libraries
 #include <vector>
 #include <cmath>
 #include <iostream>
+
+// Custom libraries
 #include "vec3.h"
 #include "color.h"
+#include "ray.h"
 
-void calculatePixels(std::vector<uint32_t>& pixels, int W, int H);
+color ray_color(const ray& r);
 
 int main()
 {
-    const int W = 800, H = 600;
+    // Image
+    auto aspect_ratio = 16.0 / 9.0;
+    int image_W = 1600;
+
+    // Calculate image height, and ensure it's at least 1
+    int image_H = int(image_W / aspect_ratio);
+    image_H = (image_H < 1) ? 1 : image_H;
+
+    // Camera
+    auto focal_length = 1.0;
+    auto viewport_H = 2.0;
+    auto viewport_W = viewport_H * (double(image_W) / image_H);
+    auto camera_center = point3(0, 0, 0);
+
+    // Calculate viewport vectors
+    auto viewport_u = vec3(viewport_W, 0, 0);
+    auto viewport_v = vec3(0, -viewport_H, 0);
+
+    // Calculate delta vectors
+    auto pixel_delta_u = viewport_u / image_W;
+    auto pixel_delta_v = viewport_v / image_H;
+
+    // Calculate location of upper-left pixel
+    auto viewport_upper_left = camera_center - vec3(0, 0, focal_length) - viewport_u / 2 - viewport_v / 2;
+    auto pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+
+    // Render Image
+    std::vector<uint32_t> pixels(image_W * image_H);
+
+    for (int j = 0; j < image_H; ++j)
+    {
+        std::clog << "\rScanlines remaining: " << (image_H - j) << ' ' << std::flush;
+        for (int i = 0; i < image_W; ++i)
+        {
+            auto pixel_center = pixel00_loc + (i * pixel_delta_u) + (j * pixel_delta_v);
+            auto ray_direction = pixel_center - camera_center;
+            ray r(camera_center, ray_direction);
+            auto pixel_color = ray_color(r);
+            pixels[j * image_W + i] = set_color(255, pixel_color);
+        }
+    }
+    std::clog << "\rDone.                 \n";
+
+    
+    //Start application
 
     // SDL3 Init
     if (!SDL_Init(0)) {
@@ -21,7 +71,7 @@ int main()
     }
 
     // Create Window
-    SDL_Window* window = SDL_CreateWindow("Raytracer", W, H, 0);
+    SDL_Window* window = SDL_CreateWindow("Raytraced image", image_W, image_H, 0);
     if (!window) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         SDL_Quit();
@@ -37,16 +87,16 @@ int main()
         return 1;
     }
 
+    // Create image texture
+    SDL_Texture* image_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING, image_W, image_H);
+    SDL_UpdateTexture(image_texture, nullptr, pixels.data(), image_W * sizeof(uint32_t));
+
 	// ImGui Init
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
-
-	//Calculate Image
-    std::vector<uint32_t> pixels(W * H);
-	calculatePixels(pixels, W, H);
-
 
 
     bool running = true;
@@ -72,38 +122,32 @@ int main()
         ImGui::Render();
 
         // Render the raytraced image
-        SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-            SDL_TEXTUREACCESS_STREAMING, W, H);
-        SDL_UpdateTexture(texture, nullptr, pixels.data(), W * sizeof(uint32_t));
         SDL_RenderClear(renderer);
-        SDL_RenderTexture(renderer, texture, nullptr, nullptr);
-        SDL_DestroyTexture(texture);
+        SDL_RenderTexture(renderer, image_texture, nullptr, nullptr);
+
 
         // Draw ImGui on top 
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
     }
 
-    // --- Cleanup ---
+    // Cleanup
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
+    SDL_DestroyTexture(image_texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
 }
 
-void calculatePixels(std::vector<uint32_t>& pixels, int W, int H)
+
+
+// Functions
+color ray_color(const ray& r)
 {
-    for (int j = 0; j < H; ++j)
-    {
-        std::clog << "\rScanlines remaining: " << (H - j) << ' ' << std::flush;
-        for (int i = 0; i < W; ++i)
-        {
-            auto pixel_color = color(double(i) / W, double(j) / H, 0.0f);
-            pixels[j * W + i] = set_color(255, pixel_color);
-        }
-    }
-    std::clog << "\rDone.                 \n";
+    vec3 unit_direction = unit_vector(r.direction());
+    auto a = 0.5 * (unit_direction.y() + 1.0);
+    return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
 }
