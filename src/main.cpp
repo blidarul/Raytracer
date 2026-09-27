@@ -15,7 +15,7 @@
 #include "ray.h"
 
 color ray_color(const ray& r);
-bool hit_sphere(const point3& center, double radius, const ray& r);
+double hit_sphere(const point3& center, double radius, const ray& r);
 
 int main()
 {
@@ -148,8 +148,13 @@ int main()
 // Functions
 color ray_color(const ray& r)
 {
-    if (hit_sphere(point3(0, 0, -1), 0.5, r))
-        return color(1, 0, 0);
+    auto t = hit_sphere(point3(0, 0, -1), 0.5, r);
+    if (t > 0.0)
+    {
+        vec3 N = unit_vector(r.at(t) - vec3(0, 0, -1));
+        return 0.5 * color(N.x() + 1, N.y() + 1, N.z() + 1);
+    }
+
 
 
     vec3 unit_direction = unit_vector(r.direction());
@@ -157,7 +162,7 @@ color ray_color(const ray& r)
     return (1.0 - a) * color(1.0, 1.0, 1.0) + a * color(0.5, 0.7, 1.0);
 }
 
-bool hit_sphere(const point3& center, double radius, const ray& r)
+double hit_sphere(const point3& center, double radius, const ray& r)
 {
     vec3 oc = center - r.origin();
     auto a = dot(r.direction(), r.direction());
@@ -165,5 +170,12 @@ bool hit_sphere(const point3& center, double radius, const ray& r)
     auto c = dot(oc, oc) - radius * radius;
     auto discriminant = b * b - 4 * a * c;
 
-    return (discriminant >= 0);
+    if (discriminant < 0)
+    {
+        return -1.0;
+    }
+    else
+    {
+        return (-b - std::sqrt(discriminant)) / (2.0 * a);
+    }
 }
