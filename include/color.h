@@ -1,7 +1,6 @@
 #pragma once
 
 #include "vec3.h"
-#include <iostream>
 #include <cmath>
 
 using color = vec3;
