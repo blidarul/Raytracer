@@ -43,7 +43,11 @@ int main()
     world.add(std::make_shared<sphere>(point3(0, -100.5, -1), 100));
 
     // Camera
-    camera cam((16.0 / 9.0), 1600, renderer);
+    double scale = 1.0;
+    int pixel_samples = 100;
+    int ray_bounces = 50;
+
+    camera cam(renderer, scale, pixel_samples, ray_bounces);
 
     // Update frame
     cam.update_frame(world);

@@ -10,9 +10,11 @@ class camera
 public:
 
     // Camera constructor
-    camera(double asp_rat, int image_W, SDL_Renderer* r) : aspect_ratio(asp_rat),
-        image_width(image_W),
-        renderer(r) {}
+    camera(SDL_Renderer* r, double scale, int pixel_samples, int ray_bounces) 
+        : renderer(r),
+          image_scale(scale),
+          samples_per_pixel(pixel_samples),
+          max_depth(ray_bounces) {}
 
     ~camera()
     {
@@ -35,14 +37,17 @@ public:
             std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
             for (int i = 0; i < image_width; ++i)
             {
-                // Get ray direcction and create ray
-                auto pixel_center = pixel00_loc + (i * pixel_delta_u) + (j * pixel_delta_v);
-                auto ray_direction = pixel_center - center;
-                ray r(center, ray_direction);
+                color pixel_color(0, 0, 0);
 
-                // Get ray color and set it in the pixels vector
-                auto pixel_color = ray_color(r, world);
-                pixels[j * image_width + i] = set_color(255, pixel_color);
+                for (int sample = 0; sample < samples_per_pixel; sample++)
+                {
+                    // Get random ray
+                    ray r = get_ray(i, j);
+                    pixel_color += ray_color(r, 0, world);
+                }
+
+                // Set ray color the pixels vector
+                pixels[j * image_width + i] = set_color(255, pixel_samples_scale * pixel_color);
             }
         }
         std::clog << "\rDone.                 \n";
@@ -59,28 +64,41 @@ public:
     }
 
 private:
-    bool   initialized  = false;
-    double aspect_ratio = 1.0;      // Ratio of image width over height
-    int    image_width  = 100;      // Rendered image width in pixel count
-    int    image_height = 100;      // Rendered image height
-    point3 center;                  // Camera center
-    point3 pixel00_loc;             // Location of pixel 0, 0
-    vec3   pixel_delta_u;           // Offset to pixel to the right
-    vec3   pixel_delta_v;           // Offset to pixel below
-    std::vector<uint32_t> pixels;   // Pixels information vector
+    bool   initialized          = false;
+    int    image_width          = 100;      // Rendered image width in pixel count
+    int    image_height         = 100;      // Rendered image height
+    double image_scale          = 1.0;      // Scale of the rendered image 
+    int    samples_per_pixel    = 10;       // Count of random samples for each pixel
+    int    max_depth            = 10;       // Maximum number of ray bounces
+    double pixel_samples_scale;             // Color scale factor for a group of samples
+    point3 center;                          // Camera center
+    point3 pixel00_loc;                     // Location of pixel 0, 0
+    vec3   pixel_delta_u;                   // Offset to pixel to the right
+    vec3   pixel_delta_v;                   // Offset to pixel below
+    std::vector<uint32_t> pixels;           // Pixels information vector
 
-    SDL_Renderer* renderer;         // SDL Renderer created in main
-    SDL_Texture* frame_texture;     // SDL Texture 
+    SDL_Renderer* renderer;                 // SDL Renderer created in main
+    SDL_Texture* frame_texture;             // SDL Texture 
 
 
     void initialize()
     {
-        // Calculate height
-        image_height = int(image_width / aspect_ratio);
-        image_height = (image_height < 1) ? 1 : image_height;
+        // Get renderer width and height
+        if (!SDL_GetRenderOutputSize(renderer, &image_width, &image_height))
+        {
+            SDL_Log("SDL_GetRenderOutputSize failed: %s", SDL_GetError());
+            SDL_DestroyRenderer(renderer);
+            SDL_Quit();
+        }
+
+        image_width /= image_scale;
+        image_height /= image_scale;
 
         // Reserve space for pixels vector
         pixels.reserve(image_height * image_width);
+
+        // Calculate sample scale
+        pixel_samples_scale = 1.0 / samples_per_pixel;
 
         // Set camera center
         center = point3(0, 0, 0);
@@ -110,13 +128,37 @@ private:
         initialized = true;
     }
 
-    color ray_color(const ray& r, const hittable& world) const
+
+    ray get_ray(int i, int j)
+    { // Get a random ray centered around i,j
+        auto offset = sample_square();
+        auto pixel_sample = pixel00_loc
+                          + ((i + offset.x()) * pixel_delta_u)
+                          + ((j + offset.y()) * pixel_delta_v);
+
+        auto ray_origin = center;
+        auto ray_direction = pixel_sample - ray_origin;
+
+        return ray(ray_origin, ray_direction);
+    }
+
+    vec3 sample_square() const
+    { // Returns the vector to a random point in the unit square centered around [0.0,0.0]
+        return vec3(random_double() - 0.5, random_double() - 0.5, 0);
+    }
+
+    color ray_color(const ray& r, int depth,const hittable& world) const
     {
+        // If we exceed the maximum number of bounces, no more light is gathered
+        if (depth >= max_depth)
+            return color(0, 0, 0);
+
         hit_record rec;
 
-        if (world.hit(r, interval(0, infinity), rec))
+        if (world.hit(r, interval(0.001, infinity), rec))
         {
-            return 0.5 * (rec.normal + color(1, 1, 1));
+            vec3 direction = random_on_hemisphere(rec.normal);
+            return 0.5 * ray_color(ray(rec.p, direction), depth + 1, world);
         }
 
         vec3 unit_direction = unit_vector(r.direction());
