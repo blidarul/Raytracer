@@ -4,15 +4,15 @@
 #include "interval.h"
 #include <cmath>
 
-using color = vec3;
+using Color = Vec3;
 
-void write_color(std::ostream& out, const color& pixel_color)
+void write_color(std::ostream& out, const Color& pixel_color)
 {
 	auto r = pixel_color.x();
 	auto g = pixel_color.y();
 	auto b = pixel_color.z();
 
-	static const interval intensity(0.000, 0.999);
+	static const Interval intensity(0.000, 0.999);
 
 	int rbyte = int(256 * intensity.clamp(r));
 	int gbyte = int(256 * intensity.clamp(g));
@@ -21,7 +21,7 @@ void write_color(std::ostream& out, const color& pixel_color)
 	out << rbyte << ' ' << gbyte << ' ' << bbyte << '\n';
 }
 
-uint32_t set_color(int alpha, const color& color)
+uint32_t set_color(int alpha, const Color& color)
 {
 	return uint32_t(uint32_t(alpha) << 24) | 
 		(uint32_t(color.e[0] * 255) << 16) | 

@@ -1,14 +1,14 @@
 #pragma once
 
-class hit_record
+class HitRecord
 {
 public:
-	point3 p;
-	vec3 normal;
+	Point3 p;
+	Vec3 normal;
 	double t;
 	bool front_face;
 
-	void set_face_normal(const ray& r, const vec3& outward_normal)
+	void set_face_normal(const Ray& r, const Vec3& outward_normal)
 	{
 		front_face = dot(r.direction(), outward_normal) < 0;
 		normal = front_face ? outward_normal : -outward_normal;
@@ -16,9 +16,9 @@ public:
 
 };
 
-class hittable
+class Hittable
 {
 public:
-	virtual ~hittable() = default;
-	virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
+	virtual ~Hittable() = default;
+	virtual bool hit(const Ray& r, Interval ray_t, HitRecord& rec) const = 0;
 };

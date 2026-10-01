@@ -1,7 +1,5 @@
-// SDL/ImGui
 #include <SDL3/SDL.h>
 
-// Custom libraries
 #include "main_header.h"
 #include "hittable.h"
 #include "hittable_list.h"
@@ -37,17 +35,17 @@ int main()
     }
 
     // World ======================================================================================
-    hittable_list world;
+    HittableList world;
 
-    world.add(std::make_shared<sphere>(point3(0, 0, -1), 0.5));
-    world.add(std::make_shared<sphere>(point3(0, -100.5, -1), 100));
+    world.add(std::make_shared<sphere>(Point3(0, 0, -1), 0.5));
+    world.add(std::make_shared<sphere>(Point3(0, -100.5, -1), 100));
 
     // Camera
     double scale = 1.0;
     int pixel_samples = 100;
     int ray_bounces = 50;
 
-    camera cam(renderer, scale, pixel_samples, ray_bounces);
+    Camera cam(renderer, scale, pixel_samples, ray_bounces);
 
     // Update frame
     cam.update_frame(world);

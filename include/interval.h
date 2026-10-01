@@ -1,12 +1,12 @@
 #pragma once
 
-class interval
+class Interval
 {
 public:
 	double min, max;
-	interval() : min(+infinity), max(-infinity) {}
+	Interval() : min(+infinity), max(-infinity) {}
 
-	interval(double min, double max) : min(min), max(max) {}
+	Interval(double min, double max) : min(min), max(max) {}
 
 	double size() const
 	{
@@ -30,8 +30,8 @@ public:
 		return x;
 	}
 
-	static const interval empty, universe;
+	static const Interval empty, universe;
 };
 
-const interval interval::empty = interval(+infinity, -infinity);
-const interval interval::universe = interval(-infinity, +infinity);
+const Interval Interval::empty = Interval(+infinity, -infinity);
+const Interval Interval::universe = Interval(-infinity, +infinity);
