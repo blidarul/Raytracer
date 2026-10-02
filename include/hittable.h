@@ -1,10 +1,13 @@
 #pragma once
 
+class Material;
+
 class HitRecord
 {
 public:
 	Point3 p;
 	Vec3 normal;
+	std::shared_ptr<Material> mat;
 	double t;
 	bool front_face;
 
