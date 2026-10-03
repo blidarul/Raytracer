@@ -15,40 +15,28 @@ public:
         : renderer(r),
           image_scale(scale),
           samples_per_pixel(pixel_samples),
-          max_depth(ray_bounces) {}
+          max_depth(ray_bounces) { initialize(); }
 
     ~Camera()
     {
         SDL_DestroyTexture(frame_texture);
     }
 
-    // Update function
-    void update_frame(const Hittable& world)
-    {
-        // Check if initialized, if not initialize
-        if (!initialized)
-        {
-            initialize();
-        }
+    bool is_frame_complete() const { return frame_complete; }
 
+    // Updates the whole scene at once
+    void update_whole_frame(const Hittable& world)
+    {
         // Loop through every pixel in the viewport 
         for (int j = 0; j < image_height; ++j)
         {
             // Loading bar
             std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+
             for (int i = 0; i < image_width; ++i)
             {
-                Color pixel_color(0, 0, 0);
-
-                for (int sample = 0; sample < samples_per_pixel; sample++)
-                {
-                    // Get random ray
-                    Ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, 0, world);
-                }
-
                 // Set ray color the pixels vector
-                pixels[j * image_width + i] = set_color(255, pixel_samples_scale * pixel_color);
+                pixels[j * image_width + i] = get_pixel(i, j, world);
             }
         }
         std::clog << "\rDone.                 \n";
@@ -57,7 +45,54 @@ public:
         SDL_UpdateTexture(frame_texture, nullptr, pixels.data(), image_width * sizeof(uint32_t));
     }
 
-    void render()
+    void update_next_pixel(const Hittable& world)
+    {
+        // Check if frame is done
+        if (is_frame_complete()) return;
+
+        // Update pixel
+        pixels[current_pixel_row * image_width + current_pixel_col] = 
+            get_pixel(current_pixel_col, current_pixel_row, world);
+
+        // Move to next pixel
+        current_pixel_col++;
+        if (current_pixel_col >= image_width)
+        {
+            current_pixel_col = 0;
+            current_pixel_row++;
+            std::clog << "\rScanlines remaining: " << (image_height - current_pixel_row) << ' ' << std::flush;
+        }
+
+
+        // Check if frame is done
+        if (current_pixel_row >= image_height)
+        {
+            frame_complete = true;
+            std::clog << "\rDone.                 \n";
+        }
+
+        //TODO Calculate the rectangle that changes, so that we avoid updating the entire texture
+
+        // Update texture
+        SDL_UpdateTexture(frame_texture, nullptr, pixels.data(), image_width * sizeof(uint32_t));
+    }
+
+    // Helper function to calculate a specific pixel in the viewport
+    uint32_t get_pixel(int i, int j, const Hittable& world)
+    {
+        Color pixel_color(0, 0, 0);
+
+        for (int sample = 0; sample < samples_per_pixel; sample++)
+        {
+            // Get random ray
+            Ray r = get_ray(i, j);
+            pixel_color += ray_color(r, 0, world);
+        }
+
+        return set_color(255, pixel_samples_scale * pixel_color);
+    }
+
+    void render() const
     {
         SDL_RenderClear(renderer);
         SDL_RenderTexture(renderer, frame_texture, nullptr, nullptr);
@@ -72,10 +107,15 @@ private:
     int    samples_per_pixel    = 10;       // Count of random samples for each pixel
     int    max_depth            = 10;       // Maximum number of ray bounces
     double pixel_samples_scale;             // Color scale factor for a group of samples
+
     Point3 center;                          // Camera center
     Point3 pixel00_loc;                     // Location of pixel 0, 0
     Vec3   pixel_delta_u;                   // Offset to pixel to the right
     Vec3   pixel_delta_v;                   // Offset to pixel below
+
+    int current_pixel_row = 0;              // Used in update_next_pixel
+    int current_pixel_col = 0;              // Used in update_next_pixel
+    bool frame_complete   = false;
     std::vector<uint32_t> pixels;           // Pixels information vector
 
     SDL_Renderer* renderer;                 // SDL Renderer created in main

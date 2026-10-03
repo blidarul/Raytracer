@@ -17,7 +17,7 @@ int main()
     }
 
     // Create Window
-    SDL_Window* window = SDL_CreateWindow("Raytraced image", 1600, 900, 0);
+    SDL_Window* window = SDL_CreateWindow("Raytraced image", 400, 225, 0);
     if (!window)
     {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
@@ -38,10 +38,10 @@ int main()
     // World ======================================================================================
     HittableList world;
 
-    auto material_ground = std::make_shared<Lambertian>(Color(0.8, 0.8, 0.0));
-    auto material_center = std::make_shared<Lambertian>(Color(0.1, 0.2, 0.5));
-    auto material_left = std::make_shared<Metal>(Color(0.8, 0.8, 0.8));
-    auto material_right = std::make_shared<Metal>(Color(0.8, 0.6, 0.2));
+    auto material_ground = std::make_shared<Lambertian> (Color(0.8, 0.8, 0.0));
+    auto material_center = std::make_shared<Lambertian> (Color(0.1, 0.2, 0.5));
+    auto material_left   = std::make_shared<Metal>      (Color(0.8, 0.8, 0.8), 0.3);
+    auto material_right  = std::make_shared<Metal>      (Color(0.8, 0.6, 0.2), 1.0);
 
     world.add(std::make_shared<Sphere>(Point3( 0.0, -100.5, -1.0), 100.0, material_ground));
     world.add(std::make_shared<Sphere>(Point3( 0.0,    0.0, -1.2),   0.5, material_center));
@@ -57,7 +57,7 @@ int main()
     Camera cam(renderer, scale, pixel_samples, ray_bounces);
 
     // Update frame
-    cam.update_frame(world);
+    //cam.update_whole_frame(world);
 
     // Running loop ===============================================================================
     bool running = true;
@@ -69,6 +69,11 @@ int main()
         {
             if (e.type == SDL_EVENT_QUIT) 
                 running = false;
+        }
+
+        if (!cam.is_frame_complete())
+        {
+            cam.update_next_pixel(world);
         }
 
         // Render the raytraced image
