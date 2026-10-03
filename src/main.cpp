@@ -56,9 +56,6 @@ int main()
 
     Camera cam(renderer, scale, pixel_samples, ray_bounces);
 
-    // Update frame
-    //cam.update_whole_frame(world);
-
     // Running loop ===============================================================================
     bool running = true;
     while (running)
@@ -71,12 +68,8 @@ int main()
                 running = false;
         }
 
-        if (!cam.is_frame_complete())
-        {
-            cam.update_next_pixel(world);
-        }
+        cam.update_next_row(world);
 
-        // Render the raytraced image
         cam.render();
     }
 

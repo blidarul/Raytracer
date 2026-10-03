@@ -22,76 +22,6 @@ public:
         SDL_DestroyTexture(frame_texture);
     }
 
-    bool is_frame_complete() const { return frame_complete; }
-
-    // Updates the whole scene at once
-    void update_whole_frame(const Hittable& world)
-    {
-        // Loop through every pixel in the viewport 
-        for (int j = 0; j < image_height; ++j)
-        {
-            // Loading bar
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-
-            for (int i = 0; i < image_width; ++i)
-            {
-                // Set ray color the pixels vector
-                pixels[j * image_width + i] = get_pixel(i, j, world);
-            }
-        }
-        std::clog << "\rDone.                 \n";
-
-        // Update texture with pixel data
-        SDL_UpdateTexture(frame_texture, nullptr, pixels.data(), image_width * sizeof(uint32_t));
-    }
-
-    void update_next_pixel(const Hittable& world)
-    {
-        // Check if frame is done
-        if (is_frame_complete()) return;
-
-        // Update pixel
-        pixels[current_pixel_row * image_width + current_pixel_col] = 
-            get_pixel(current_pixel_col, current_pixel_row, world);
-
-        // Move to next pixel
-        current_pixel_col++;
-        if (current_pixel_col >= image_width)
-        {
-            current_pixel_col = 0;
-            current_pixel_row++;
-            std::clog << "\rScanlines remaining: " << (image_height - current_pixel_row) << ' ' << std::flush;
-        }
-
-
-        // Check if frame is done
-        if (current_pixel_row >= image_height)
-        {
-            frame_complete = true;
-            std::clog << "\rDone.                 \n";
-        }
-
-        //TODO Calculate the rectangle that changes, so that we avoid updating the entire texture
-
-        // Update texture
-        SDL_UpdateTexture(frame_texture, nullptr, pixels.data(), image_width * sizeof(uint32_t));
-    }
-
-    // Helper function to calculate a specific pixel in the viewport
-    uint32_t get_pixel(int i, int j, const Hittable& world)
-    {
-        Color pixel_color(0, 0, 0);
-
-        for (int sample = 0; sample < samples_per_pixel; sample++)
-        {
-            // Get random ray
-            Ray r = get_ray(i, j);
-            pixel_color += ray_color(r, 0, world);
-        }
-
-        return set_color(255, pixel_samples_scale * pixel_color);
-    }
-
     void render() const
     {
         SDL_RenderClear(renderer);
@@ -99,8 +29,51 @@ public:
         SDL_RenderPresent(renderer);
     }
 
+    bool is_frame_complete() const { return frame_complete; }
+    void mark_frame_complete()
+    {
+        frame_complete = true;
+        std::clog << "\rFrame completed. \n";
+    }
+
+    int get_height() const { return image_height; }
+    int get_width() const { return image_width; }
+
+    //// Updates the whole scene at once
+    //void update_frame(const Hittable& world)
+    //{
+    //    // Loop through every pixel in the viewport 
+    //    for (int j = 0; j < image_height; ++j)
+    //    {
+    //        // Loading bar
+    //        std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+
+    //        update_row(j, world);
+    //    }
+    //    std::clog << "\rDone.                 \n";
+
+    //    frame_complete = true;
+    //}
+
+    void update_next_row(const Hittable& world)
+    {
+        if (is_frame_complete())
+            return;
+
+        update_row(rows_calculated, world);
+
+        rows_calculated++;
+
+        std::clog << "\rRows remaining: " << (image_height - rows_calculated) << ' ' << std::flush;
+
+        if (rows_calculated >= image_height)
+        {
+            mark_frame_complete();
+        }
+    }
+
 private:
-    bool   initialized          = false;
+    bool   initialized          = false;    // Indicates if object is initialized
     int    image_width          = 100;      // Rendered image width in pixel count
     int    image_height         = 100;      // Rendered image height
     double image_scale          = 1.0;      // Scale of the rendered image 
@@ -113,9 +86,8 @@ private:
     Vec3   pixel_delta_u;                   // Offset to pixel to the right
     Vec3   pixel_delta_v;                   // Offset to pixel below
 
-    int current_pixel_row = 0;              // Used in update_next_pixel
-    int current_pixel_col = 0;              // Used in update_next_pixel
-    bool frame_complete   = false;
+    int rows_calculated         = 0;        // Number of calculated rows
+    bool frame_complete         = false;    // Indicates if frame is complete
     std::vector<uint32_t> pixels;           // Pixels information vector
 
     SDL_Renderer* renderer;                 // SDL Renderer created in main
@@ -137,6 +109,7 @@ private:
 
         // Reserve space for pixels vector
         pixels.reserve(image_height * image_width);
+        pixels.resize(image_height * image_width, 0);
 
         // Calculate sample scale
         pixel_samples_scale = 1.0 / samples_per_pixel;
@@ -168,7 +141,6 @@ private:
 
         initialized = true;
     }
-
 
     Ray get_ray(int i, int j)
     { // Get a random ray centered around i,j
@@ -209,6 +181,41 @@ private:
         Vec3 unit_direction = unit_vector(r.direction());
         auto a = 0.5 * (unit_direction.y() + 1.0);
         return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
+    }
+
+    // Helper functions=========================================================================================================
+    void update_row(int j, const Hittable& world)
+    {
+        calculate_row(j, world);
+        SDL_Rect rect = {0, j, image_width, 1};
+
+        // Update texture with pixel data
+        SDL_UpdateTexture(frame_texture, &rect, pixels.data() + j * image_width, image_width * sizeof(uint32_t));
+    }
+
+    // Calculates the pixels vector for row j
+    void calculate_row(int j, const Hittable& world)
+    {
+        for (int i = 0; i < image_width; ++i)
+        {
+            // Set ray color the pixels vector
+            pixels[j * image_width + i] = get_pixel(i, j, world);
+        }
+    }
+
+    // Helper function to calculate a specific pixel in the viewport
+    uint32_t get_pixel(int i, int j, const Hittable& world)
+    {
+        Color pixel_color(0, 0, 0);
+
+        for (int sample = 0; sample < samples_per_pixel; sample++)
+        {
+            // Get random ray
+            Ray r = get_ray(i, j);
+            pixel_color += ray_color(r, 0, world);
+        }
+
+        return set_color(255, pixel_samples_scale * pixel_color);
     }
 
 };
