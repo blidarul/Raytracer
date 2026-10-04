@@ -11,11 +11,15 @@ class Camera
 public:
 
     // Camera constructor
-    Camera(SDL_Renderer* r, double scale, int pixel_samples, int ray_bounces) 
+    Camera(SDL_Renderer* r, double scale, int pixel_samples, int ray_bounces, double fov) 
         : renderer(r),
           image_scale(scale),
           samples_per_pixel(pixel_samples),
-          max_depth(ray_bounces) { initialize(); }
+          max_depth(ray_bounces),
+          vfov(fov) 
+    { 
+        initialize(); 
+    }
 
     ~Camera()
     {
@@ -39,22 +43,57 @@ public:
     int get_height() const { return image_height; }
     int get_width() const { return image_width; }
 
-    //// Updates the whole scene at once
-    //void update_frame(const Hittable& world)
-    //{
-    //    // Loop through every pixel in the viewport 
-    //    for (int j = 0; j < image_height; ++j)
-    //    {
-    //        // Loading bar
-    //        std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+    void move_camera(Point3 lookfrom, Point3 lookat, Vec3 cameraup)
+    {
+        look_from = lookfrom;
+        look_at = lookat;
+        vup = cameraup;
 
-    //        update_row(j, world);
-    //    }
-    //    std::clog << "\rDone.                 \n";
+        // Set camera center
+        center = look_from;
 
-    //    frame_complete = true;
-    //}
+        // Determine viewport dimensions
+        auto focal_length = (look_from - look_at).length();
+        auto theta = degrees_to_radians(vfov);
+        auto h = std::tan(theta / 2);
+        auto viewport_height = 2 * h * focal_length;
+        auto viewport_width = viewport_height * (double(image_width) / image_height);
 
+        // Calculate basis vectors
+        w = unit_vector(look_from - look_at);
+        u = unit_vector(cross(vup, w));
+        v = cross(w, u);
+
+        // Calculate the vectors across the horizontal and down the vertical viewport edges
+        auto viewport_u = viewport_width * u;
+        auto viewport_v = viewport_height * -v;
+
+        // Calculate the horizontal and vertical delta vectors from pixel to pixel
+        pixel_delta_u = viewport_u / image_width;
+        pixel_delta_v = viewport_v / image_height;
+
+        // Calculate the location of the upper left pixel
+        auto viewport_upper_left = center - focal_length * w - viewport_u / 2 - viewport_v / 2;
+        pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+    }
+
+    // Updates the whole scene at once
+    void update_frame(const Hittable& world)
+    {
+        // Loop through every pixel in the viewport 
+        for (int j = 0; j < image_height; ++j)
+        {
+            // Loading bar
+            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+
+            update_row(j, world);
+        }
+        std::clog << "\rDone.                 \n";
+
+        frame_complete = true;
+    }
+
+    // Updates the next row of the scene
     void update_next_row(const Hittable& world)
     {
         if (is_frame_complete())
@@ -78,8 +117,14 @@ private:
     int    image_height         = 100;      // Rendered image height
     double image_scale          = 1.0;      // Scale of the rendered image 
     int    samples_per_pixel    = 10;       // Count of random samples for each pixel
-    int    max_depth            = 10;       // Maximum number of ray bounces
     double pixel_samples_scale;             // Color scale factor for a group of samples
+    int    max_depth            = 10;       // Maximum number of ray bounces
+
+    double vfov      = 90;                  // Vertical view angle (field of view)
+    Point3 look_from = Point3(0, 0, 0);     // Point camera is looking from
+    Point3 look_at   = Point3(0, 0, -1);    // Point camera is looking at
+    Vec3 vup         = Vec3(0, 1, 0);       // Camera relative 'up' direction
+    Vec3 u, v, w;                           // Camera frame basis vectors
 
     Point3 center;                          // Camera center
     Point3 pixel00_loc;                     // Location of pixel 0, 0
@@ -100,7 +145,6 @@ private:
         if (!SDL_GetRenderOutputSize(renderer, &image_width, &image_height))
         {
             SDL_Log("SDL_GetRenderOutputSize failed: %s", SDL_GetError());
-            SDL_DestroyRenderer(renderer);
             SDL_Quit();
         }
 
@@ -113,27 +157,6 @@ private:
 
         // Calculate sample scale
         pixel_samples_scale = 1.0 / samples_per_pixel;
-
-        // Set camera center
-        center = Point3(0, 0, 0);
-
-        // Determine viewport dimensions.
-        auto focal_length = 1.0;
-        auto viewport_height = 2.0;
-        auto viewport_width = viewport_height * (double(image_width) / image_height);
-
-        // Calculate the vectors across the horizontal and down the vertical viewport edges.
-        auto viewport_u = Vec3(viewport_width, 0, 0);
-        auto viewport_v = Vec3(0, -viewport_height, 0);
-
-        // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-        pixel_delta_u = viewport_u / image_width;
-        pixel_delta_v = viewport_v / image_height;
-
-        // Calculate the location of the upper left pixel.
-        auto viewport_upper_left =
-            center - Vec3(0, 0, focal_length) - viewport_u / 2 - viewport_v / 2;
-        pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
         // Create texture as streaming
         frame_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
