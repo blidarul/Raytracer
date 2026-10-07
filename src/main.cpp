@@ -51,19 +51,28 @@ int main()
     world.add(std::make_shared<Sphere>(Point3( 1.0,    0.0, -1.0),   0.5, material_right));
 
 
-    // Camera
-    double scale = 2.0;
-    int pixel_samples = 100;
-    int ray_bounces = 50;
+    // Create camera object
+    Camera cam(renderer, 4.0);
 
-    double fov = 20;
-    Point3 lookfrom = Point3(-2, 2, 1);
-    Point3 lookat = Point3(0, 0, -1);
-    Vec3 vup = Vec3(0, 1, 0);
+    // Define camera parameters
+    int     pixel_samples  = 100;
+    int     ray_bounces    = 50;
+    double  fov            = 20;
+    Point3  lookfrom       = Point3(-2, 2, 1);
+    Point3  lookat         = Point3(0, 0, -1);
+    Vec3    vup            = Vec3(0, 1, 0);
+    double  defocus_angle  = 10.0;
+    double  focus_distance = 3.4;
 
-    Camera cam(renderer, scale, pixel_samples, ray_bounces, fov);
 
-    cam.move_camera(lookfrom, lookat, vup);
+    cam.set_sample_number(pixel_samples);
+    cam.set_max_bounces(ray_bounces);
+    cam.set_fov(fov);
+    cam.set_position(lookfrom, lookat, vup);
+    cam.set_defocus_angle(defocus_angle);
+    cam.set_focus_distance(focus_distance);
+
+    cam.update_camera();
 
     // Running loop ===============================================================================
     bool running = true;

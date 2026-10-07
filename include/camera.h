@@ -11,12 +11,7 @@ class Camera
 public:
 
     // Camera constructor
-    Camera(SDL_Renderer* r, double scale, int pixel_samples, int ray_bounces, double fov) 
-        : renderer(r),
-          image_scale(scale),
-          samples_per_pixel(pixel_samples),
-          max_depth(ray_bounces),
-          vfov(fov) 
+    Camera(SDL_Renderer* r, double scale) : renderer(r), image_scale(scale)
     { 
         initialize(); 
     }
@@ -40,24 +35,65 @@ public:
         std::clog << "\rFrame completed. \n";
     }
 
+    // Getters
     int get_height() const { return image_height; }
     int get_width() const { return image_width; }
 
-    void move_camera(Point3 lookfrom, Point3 lookat, Vec3 cameraup)
+    // Setters
+    //=============================================================================================
+    
+    // Sets the camera position
+    void set_position(Point3 lookfrom, Point3 lookat, Vec3 cameraup)
     {
         look_from = lookfrom;
         look_at = lookat;
         vup = cameraup;
+    }
+
+    // Sets the number of rays that average the color (anti-aliasing)
+    void set_sample_number(int samples)
+    {
+        samples_per_pixel = (samples > 1) ? samples : 1;
+    }
+
+    void set_max_bounces(int bounces)
+    {
+        max_depth = bounces;
+    }
+
+    void set_fov(double fov)
+    {
+        vfov = fov;
+    }
+
+    void set_defocus_angle(double angle)
+    {
+        defocus_angle = angle;
+    }
+
+    void set_focus_distance(double dist)
+    {
+        focus_distance = dist;
+    }
+
+    // Update functions
+    //=============================================================================================
+
+    // Updates the camera, recalculating it's parameters
+    void update_camera()
+    {
+        // Calculate sample scale
+        pixel_samples_scale = 1.0 / samples_per_pixel;
 
         // Set camera center
         center = look_from;
 
         // Determine viewport dimensions
-        auto focal_length = (look_from - look_at).length();
         auto theta = degrees_to_radians(vfov);
         auto h = std::tan(theta / 2);
-        auto viewport_height = 2 * h * focal_length;
-        auto viewport_width = viewport_height * (double(image_width) / image_height);
+        auto viewport_height = 2 * h * focus_distance;
+        auto viewport_width = viewport_height * 
+                        (double(image_width) / image_height);
 
         // Calculate basis vectors
         w = unit_vector(look_from - look_at);
@@ -73,8 +109,16 @@ public:
         pixel_delta_v = viewport_v / image_height;
 
         // Calculate the location of the upper left pixel
-        auto viewport_upper_left = center - focal_length * w - viewport_u / 2 - viewport_v / 2;
-        pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+        auto viewport_upper_left = center - focus_distance * w - 
+                                    viewport_u / 2 - viewport_v / 2;
+        pixel00_loc = viewport_upper_left + 
+                    0.5 * (pixel_delta_u + pixel_delta_v);
+
+        // Calculate the camera defocus disk basis vectors
+        auto defocus_radius = focus_distance * 
+                    std::tan(degrees_to_radians(defocus_angle / 2));
+        defocus_disk_u = u * defocus_radius;
+        defocus_disk_v = v * defocus_radius;
     }
 
     // Updates the whole scene at once
@@ -84,7 +128,8 @@ public:
         for (int j = 0; j < image_height; ++j)
         {
             // Loading bar
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+            std::clog << "\rScanlines remaining: " << 
+                (image_height - j) << ' ' << std::flush;
 
             update_row(j, world);
         }
@@ -103,16 +148,20 @@ public:
 
         rows_calculated++;
 
-        std::clog << "\rRows remaining: " << (image_height - rows_calculated) << ' ' << std::flush;
+        std::clog << "\rRows remaining: " << 
+            (image_height - rows_calculated) << ' ' << std::flush;
 
         if (rows_calculated >= image_height)
         {
             mark_frame_complete();
         }
     }
+    //=============================================================================================
 
 private:
     bool   initialized          = false;    // Indicates if object is initialized
+    int    window_width         = 100;
+    int    window_height        = 100;
     int    image_width          = 100;      // Rendered image width in pixel count
     int    image_height         = 100;      // Rendered image height
     double image_scale          = 1.0;      // Scale of the rendered image 
@@ -120,11 +169,16 @@ private:
     double pixel_samples_scale;             // Color scale factor for a group of samples
     int    max_depth            = 10;       // Maximum number of ray bounces
 
-    double vfov      = 90;                  // Vertical view angle (field of view)
-    Point3 look_from = Point3(0, 0, 0);     // Point camera is looking from
-    Point3 look_at   = Point3(0, 0, -1);    // Point camera is looking at
-    Vec3 vup         = Vec3(0, 1, 0);       // Camera relative 'up' direction
-    Vec3 u, v, w;                           // Camera frame basis vectors
+    double vfov         = 90;               // Vertical view angle (field of view)
+    Point3 look_from    = Point3(0, 0, 0);  // Point camera is looking from
+    Point3 look_at      = Point3(0, 0, -1); // Point camera is looking at
+    Vec3   vup          = Vec3(0, 1, 0);    // Camera relative 'up' direction
+    Vec3   u, v, w;                         // Camera frame basis vectors
+
+    double defocus_angle    = 0;            // Variation angle of rays through each pixel
+    double focus_distance   = 10;           // Distance from camera look-from point to plane of focus
+    Vec3   defocus_disk_u;                  // Defocus disk horizontal radius
+    Vec3   defocus_disk_v;                  // Defocus disk vertical radius
 
     Point3 center;                          // Camera center
     Point3 pixel00_loc;                     // Location of pixel 0, 0
@@ -137,49 +191,61 @@ private:
 
     SDL_Renderer* renderer;                 // SDL Renderer created in main
     SDL_Texture* frame_texture;             // SDL Texture 
-
+    //=============================================================================================
 
     void initialize()
     {
         // Get renderer width and height
-        if (!SDL_GetRenderOutputSize(renderer, &image_width, &image_height))
+        if (!SDL_GetRenderOutputSize(renderer, &window_width, &window_height))
         {
             SDL_Log("SDL_GetRenderOutputSize failed: %s", SDL_GetError());
             SDL_Quit();
         }
 
-        image_width /= image_scale;
-        image_height /= image_scale;
+        // Calculate image width and height
+        image_width = window_width / image_scale;
+        image_height = window_height / image_scale;
+
+        update_camera();
+
 
         // Reserve space for pixels vector
         pixels.reserve(image_height * image_width);
         pixels.resize(image_height * image_width, 0);
 
-        // Calculate sample scale
-        pixel_samples_scale = 1.0 / samples_per_pixel;
-
         // Create texture as streaming
-        frame_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-            SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
+        if(!frame_texture)
+            frame_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
+                SDL_TEXTUREACCESS_STREAMING, image_width, image_height);
 
         initialized = true;
     }
 
+
+    // Construct a ray directed at a point around i,j, and centered in the defous disk
     Ray get_ray(int i, int j)
-    { // Get a random ray centered around i,j
+    {
         auto offset = sample_square();
         auto pixel_sample = pixel00_loc
                           + ((i + offset.x()) * pixel_delta_u)
                           + ((j + offset.y()) * pixel_delta_v);
 
-        auto ray_origin = center;
+        auto ray_origin = (defocus_angle < 0) ? center : defocus_disk_sample();
         auto ray_direction = pixel_sample - ray_origin;
 
         return Ray(ray_origin, ray_direction);
     }
 
+    // Returns a random point in the camera defocus_disk
+    Vec3 defocus_disk_sample() const
+    {
+        auto p = random_on_unit_disk();
+        return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
+    }
+
+    // Returns the vector to a random point in the unit square centered around [0.0,0.0]
     Vec3 sample_square() const
-    { // Returns the vector to a random point in the unit square centered around [0.0,0.0]
+    {
         return Vec3(random_double() - 0.5, random_double() - 0.5, 0);
     }
 
