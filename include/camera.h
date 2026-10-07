@@ -33,15 +33,32 @@ public:
     {
         frame_complete = true;
         std::clog << "\rFrame completed. \n";
+
+        // Save the frame as a surface
+        SDL_Surface* surface = SDL_CreateSurfaceFrom(
+            image_width,
+            image_height,
+            SDL_PIXELFORMAT_ARGB8888,
+            pixels.data(),
+            image_width * sizeof(uint32_t)
+        );
+
+        // Save the surface as an image
+        if (surface)
+        {
+            SDL_SavePNG(surface, "../output.png");
+            SDL_DestroySurface(surface);
+            std::clog << "Image saved to output.png\n";
+        }
+        else
+            std::clog << "Failed to create surface for saving.\n";
     }
 
     // Getters
     int get_height() const { return image_height; }
     int get_width() const { return image_width; }
 
-    // Setters
-    //=============================================================================================
-    
+    // Setters ====================================================================================
     // Sets the camera position
     void set_position(Point3 lookfrom, Point3 lookat, Vec3 cameraup)
     {
@@ -76,9 +93,7 @@ public:
         focus_distance = dist;
     }
 
-    // Update functions
-    //=============================================================================================
-
+    // Update functions ===========================================================================
     // Updates the camera, recalculating it's parameters
     void update_camera()
     {
@@ -156,8 +171,8 @@ public:
             mark_frame_complete();
         }
     }
-    //=============================================================================================
 
+    // Private parameters =========================================================================
 private:
     bool   initialized          = false;    // Indicates if object is initialized
     int    window_width         = 100;
@@ -190,9 +205,9 @@ private:
     std::vector<uint32_t> pixels;           // Pixels information vector
 
     SDL_Renderer* renderer;                 // SDL Renderer created in main
-    SDL_Texture* frame_texture;             // SDL Texture 
-    //=============================================================================================
+    SDL_Texture* frame_texture;             // SDL Texture
 
+    // Private functions ==========================================================================
     void initialize()
     {
         // Get renderer width and height
@@ -272,14 +287,16 @@ private:
         return (1.0 - a) * Color(1.0, 1.0, 1.0) + a * Color(0.5, 0.7, 1.0);
     }
 
-    // Helper functions=========================================================================================================
+    // Helper functions ===========================================================================
     void update_row(int j, const Hittable& world)
     {
         calculate_row(j, world);
         SDL_Rect rect = {0, j, image_width, 1};
 
         // Update texture with pixel data
-        SDL_UpdateTexture(frame_texture, &rect, pixels.data() + j * image_width, image_width * sizeof(uint32_t));
+        SDL_UpdateTexture(frame_texture, &rect, 
+                          pixels.data() + j * image_width, 
+                          image_width * sizeof(uint32_t));
     }
 
     // Calculates the pixels vector for row j
