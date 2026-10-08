@@ -2,6 +2,8 @@ A C++ ray tracer with an SDL3 display, built while following the [*Ray Tracing i
 
 The project renders a procedurally generated scene of spheres using physically inspired materials, recursive ray bounces, anti-aliasing, and depth of field.
 
+![Render after first book](images/after_first_book.png)
+
 ## Features
 
 - SDL3 window and renderer output
