@@ -46,7 +46,7 @@ public:
         // Save the surface as an image
         if (surface)
         {
-            SDL_SavePNG(surface, "../output.png");
+            SDL_SavePNG(surface, "../images/latest_output.png");
             SDL_DestroySurface(surface);
             std::clog << "Image saved to output.png\n";
         }
