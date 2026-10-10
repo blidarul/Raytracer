@@ -5,6 +5,7 @@
 #include "hittable_list.h"
 #include "material.h"
 #include "sphere.h"
+#include "scenes.h"
 
 int main()
 {
@@ -35,89 +36,40 @@ int main()
         return 1;
     }
 
-    // World ======================================================================================
-    HittableList world;
-
-    auto ground_material = std::make_shared<Lambertian>(Color(0.5, 0.5, 0.5));
-    world.add(std::make_shared<Sphere>(Point3(0, -1000, 0), 1000, ground_material));
-
-    for (int a = -11; a < 11; a++)
-    {
-        for (int b = -11; b < 11; b++)
-        {
-            auto choose_mat = random_double();
-            Point3 center(a + 0.9 * random_double(), 0.2, b + 0.9 * random_double());
-
-            if ((center - Point3(4, 0.2, 0)).length() > 0.9)
-            {
-                std::shared_ptr<Material> sphere_material;
-
-                if (choose_mat < 0.8)
-                {
-                    // diffuse
-                    auto albedo = Color::random() * Color::random();
-                    sphere_material = std::make_shared<Lambertian>(albedo);
-                    world.add(std::make_shared<Sphere>(center, 0.2, sphere_material));
-                }
-                else if (choose_mat < 0.95)
-                {
-                    // metal
-                    auto albedo = Color::random(0.5, 1);
-                    auto fuzz = random_double(0, 0.5);
-                    sphere_material = std::make_shared<Metal>(albedo, fuzz);
-                    world.add(std::make_shared<Sphere>(center, 0.2, sphere_material));
-                }
-                else
-                {
-                    // glass
-                    sphere_material = std::make_shared<Dielectric>(1.5);
-                    world.add(std::make_shared<Sphere>(center, 0.2, sphere_material));
-                }
-            }
-        }
-    }
-
-    auto material1 = std::make_shared<Dielectric>(1.5);
-    world.add(std::make_shared<Sphere>(Point3(0, 1, 0), 1.0, material1));
-
-    auto material2 = std::make_shared<Lambertian>(Color(0.4, 0.2, 0.1));
-    world.add(std::make_shared<Sphere>(Point3(-4, 1, 0), 1.0, material2));
-
-    auto material3 = std::make_shared<Metal>(Color(0.7, 0.6, 0.5), 0.0);
-    world.add(std::make_shared<Sphere>(Point3(4, 1, 0), 1.0, material3));
-
-    // Camera =====================================================================================
+    // Camera and Scene ===========================================================================
+    // Set the preset scene
+    Scene scene(1);
+    HittableList world = scene.world;
+    
     // Create camera object
     Camera cam(renderer, 1.0);
 
-    // Define camera parameters
-    int     pixel_samples  = 500;
-    int     ray_bounces    = 50;
-    double  fov            = 20;
-    Point3  lookfrom       = Point3(13, 2, 3);
-    Point3  lookat         = Point3(0, 0, 0);
-    Vec3    vup            = Vec3(0, 1, 0);
-    double  defocus_angle  = 0.6;
-    double  focus_distance = 10.0;
+    cam.set_position(scene.cam_pos);
+    cam.set_focus_distance(scene.focus_distance);
+    cam.set_defocus_angle(scene.defocus_angle);
 
+    // Camera fov
+    double fov = 20;
+    cam.set_fov(fov);
+    
+    // Camera quality parameters
+    int     pixel_samples = 50;
+    int     ray_bounces   = 50;
     cam.set_sample_number(pixel_samples);
     cam.set_max_bounces(ray_bounces);
-    cam.set_fov(fov);
-    cam.set_position(lookfrom, lookat, vup);
-    cam.set_defocus_angle(defocus_angle);
-    cam.set_focus_distance(focus_distance);
-
-    cam.update_camera();
 
     // Running loop ===============================================================================
+    // Update camera before using it
+    cam.update_camera();
     bool running = true;
     while (running)
     {
-        // Event polling
-        SDL_Event e;
-        while (SDL_PollEvent(&e))
+        // SDL Event polling
+        SDL_Event event;
+        while (SDL_PollEvent(&event))
         {
-            if (e.type == SDL_EVENT_QUIT) 
+
+            if (event.type == SDL_EVENT_QUIT) 
                 running = false;
         }
 

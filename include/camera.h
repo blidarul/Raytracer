@@ -6,6 +6,43 @@
 #include <vector>
 #include <SDL3/SDL.h>
 
+class CameraPosition
+{
+public:
+    friend class Camera;
+
+    // Default constructor
+    CameraPosition()
+    {
+        look_from = Point3(0, 0, 0);
+        look_at = Point3(0, 0, -1);
+        up_vector = Vec3(0, 1, 0);
+
+        // Calculate basis vectors
+        w = unit_vector(look_from - look_at);
+        u = unit_vector(cross(up_vector, w));
+        v = cross(w, u);
+    }
+
+    CameraPosition(Point3 lookfrom, Point3 lookat, Vec3 vup) : 
+        look_from(lookfrom),
+        look_at(lookat),
+        up_vector(vup)
+    {
+        // Calculate basis vectors
+        w = unit_vector(look_from - look_at);
+        u = unit_vector(cross(up_vector, w));
+        v = cross(w, u);
+    }
+
+private:
+    Point3 look_from;
+    Point3 look_at;
+    Vec3 up_vector;
+
+    Vec3 u, v, w;
+};
+
 class Camera
 {
 public:
@@ -29,7 +66,9 @@ public:
     }
 
     bool is_frame_complete() const { return frame_complete; }
-    void mark_frame_complete()
+
+    // Sets the frame as completed and exports the image
+    void mark_frame_complete_and_save()
     {
         frame_complete = true;
         std::clog << "\rFrame completed. \n";
@@ -48,7 +87,7 @@ public:
         {
             SDL_SavePNG(surface, "../images/latest_output.png");
             SDL_DestroySurface(surface);
-            std::clog << "Image saved to output.png\n";
+            std::clog << "Image saved to latest_output.png\n";
         }
         else
             std::clog << "Failed to create surface for saving.\n";
@@ -60,11 +99,9 @@ public:
 
     // Setters ====================================================================================
     // Sets the camera position
-    void set_position(Point3 lookfrom, Point3 lookat, Vec3 cameraup)
+    void set_position(CameraPosition pos)
     {
-        look_from = lookfrom;
-        look_at = lookat;
-        vup = cameraup;
+        position = pos;
     }
 
     // Sets the number of rays that average the color (anti-aliasing)
@@ -97,11 +134,11 @@ public:
     // Updates the camera, recalculating it's parameters
     void update_camera()
     {
+        // Set frame as not complete when changing camera parameters
+        frame_complete = false;
+
         // Calculate sample scale
         pixel_samples_scale = 1.0 / samples_per_pixel;
-
-        // Set camera center
-        center = look_from;
 
         // Determine viewport dimensions
         auto theta = degrees_to_radians(vfov);
@@ -110,21 +147,16 @@ public:
         auto viewport_width = viewport_height * 
                         (double(image_width) / image_height);
 
-        // Calculate basis vectors
-        w = unit_vector(look_from - look_at);
-        u = unit_vector(cross(vup, w));
-        v = cross(w, u);
-
         // Calculate the vectors across the horizontal and down the vertical viewport edges
-        auto viewport_u = viewport_width * u;
-        auto viewport_v = viewport_height * -v;
+        auto viewport_u = viewport_width * position.u;
+        auto viewport_v = viewport_height * -position.v;
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel
         pixel_delta_u = viewport_u / image_width;
         pixel_delta_v = viewport_v / image_height;
 
         // Calculate the location of the upper left pixel
-        auto viewport_upper_left = center - focus_distance * w - 
+        auto viewport_upper_left = position.look_from - focus_distance * position.w -
                                     viewport_u / 2 - viewport_v / 2;
         pixel00_loc = viewport_upper_left + 
                     0.5 * (pixel_delta_u + pixel_delta_v);
@@ -132,13 +164,16 @@ public:
         // Calculate the camera defocus disk basis vectors
         auto defocus_radius = focus_distance * 
                     std::tan(degrees_to_radians(defocus_angle / 2));
-        defocus_disk_u = u * defocus_radius;
-        defocus_disk_v = v * defocus_radius;
+        defocus_disk_u = position.u * defocus_radius;
+        defocus_disk_v = position.v * defocus_radius;
     }
 
     // Updates the whole scene at once
     void update_frame(const Hittable& world)
     {
+        if (is_frame_complete())
+            return;
+
         // Loop through every pixel in the viewport 
         for (int j = 0; j < image_height; ++j)
         {
@@ -146,11 +181,14 @@ public:
             std::clog << "\rScanlines remaining: " << 
                 (image_height - j) << ' ' << std::flush;
 
-            update_row(j, world);
+            calculate_row(j, world);
         }
+
+        SDL_UpdateTexture(frame_texture, nullptr, pixels.data(),
+                          image_width * sizeof(uint32_t));
         std::clog << "\rDone.                 \n";
 
-        frame_complete = true;
+        mark_frame_complete_and_save();
     }
 
     // Updates the next row of the scene
@@ -168,7 +206,7 @@ public:
 
         if (rows_calculated >= image_height)
         {
-            mark_frame_complete();
+            mark_frame_complete_and_save();
         }
     }
 
@@ -180,22 +218,19 @@ private:
     int    image_width          = 100;      // Rendered image width in pixel count
     int    image_height         = 100;      // Rendered image height
     double image_scale          = 1.0;      // Scale of the rendered image 
+
     int    samples_per_pixel    = 10;       // Count of random samples for each pixel
     double pixel_samples_scale;             // Color scale factor for a group of samples
     int    max_depth            = 10;       // Maximum number of ray bounces
 
     double vfov         = 90;               // Vertical view angle (field of view)
-    Point3 look_from    = Point3(0, 0, 0);  // Point camera is looking from
-    Point3 look_at      = Point3(0, 0, -1); // Point camera is looking at
-    Vec3   vup          = Vec3(0, 1, 0);    // Camera relative 'up' direction
-    Vec3   u, v, w;                         // Camera frame basis vectors
+    CameraPosition position;                // Camera position
 
     double defocus_angle    = 0;            // Variation angle of rays through each pixel
     double focus_distance   = 10;           // Distance from camera look-from point to plane of focus
     Vec3   defocus_disk_u;                  // Defocus disk horizontal radius
     Vec3   defocus_disk_v;                  // Defocus disk vertical radius
 
-    Point3 center;                          // Camera center
     Point3 pixel00_loc;                     // Location of pixel 0, 0
     Vec3   pixel_delta_u;                   // Offset to pixel to the right
     Vec3   pixel_delta_v;                   // Offset to pixel below
@@ -223,7 +258,6 @@ private:
 
         update_camera();
 
-
         // Reserve space for pixels vector
         pixels.reserve(image_height * image_width);
         pixels.resize(image_height * image_width, 0);
@@ -245,7 +279,7 @@ private:
                           + ((i + offset.x()) * pixel_delta_u)
                           + ((j + offset.y()) * pixel_delta_v);
 
-        auto ray_origin = (defocus_angle < 0) ? center : defocus_disk_sample();
+        auto ray_origin = (defocus_angle < 0) ? position.look_from : defocus_disk_sample();
         auto ray_direction = pixel_sample - ray_origin;
 
         return Ray(ray_origin, ray_direction);
@@ -255,7 +289,7 @@ private:
     Vec3 defocus_disk_sample() const
     {
         auto p = random_on_unit_disk();
-        return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
+        return position.look_from + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
     }
 
     // Returns the vector to a random point in the unit square centered around [0.0,0.0]
